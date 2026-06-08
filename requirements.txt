@@ -1,0 +1,8 @@
+openai
+dashscope
+torch
+opencv-python
+sounddevice
+vosk
+pywin32
+pymodbus

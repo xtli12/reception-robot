@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 模型权重与训练/示教数据（体积大，不入库）
+skill/
+*.pth
+data_chunk/
+
+# Vosk 离线语音模型（体积大，单独下载）
+vosk-model-*/
+
+# 密钥与本地配置
+.env
+*.env
+
+# 图片/临时输出
+1.jpg
+*.tmp
+
+# IDE
+.idea/
+.vscode/
