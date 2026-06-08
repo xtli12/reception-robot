@@ -116,15 +116,17 @@ base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
 Reception/
 ├── reception_LLM.py        # 主入口：语音识别 + 大模型决策 + 播报 + 技能调度
 ├── action_chunk_model.py   # action chunk 模型结构、数据集与训练脚本
+├── data_collect.py         # 拖动示教连续帧数据采集（生成 data_chunk 训练数据）
 ├── robot_arm.py            # 机械臂连接与连续帧 chunk 的 CANFD 透传
 ├── hand_control.py         # 灵巧手 Modbus 开合控制
-├── LLM_API.py              # DashScope/Qwen 接口示例（含 api_key 兜底来源）
+├── LLM_API.py              # DashScope/Qwen 接口示例（API Key 读环境变量）
 ├── skill/                  # 各技能训练好的 .pth 模型
 │   ├── grasp_card.pth
 │   ├── return_card.pth
 │   ├── grasp_paper.pth
 │   ├── grasp_pen.pth
 │   └── grasp_water.pth
+├── data_chunk/             # （训练用）连续帧示教数据，按技能/示教分目录
 └── vosk-model-small-cn-0.22/  # Vosk 离线中文语音模型
 ```
 
@@ -223,5 +225,57 @@ python reception_LLM.py
 5. 根据决策流式播报回复，并执行对应技能。
 
 按 `Ctrl+C` 退出。
+
+---
+
+## 训练 action chunk 模型
+
+技能模型的完整训练管线分两步：**① 采集连续帧示教数据 → ② 训练模型**。
+
+### 1. 采集示教数据（`data_collect.py`）
+
+通过拖动示教录制一遍技能动作，脚本会按采样周期（约 50Hz）同步采集「相机图像 + 当前 6 个关节角」，自动保存成训练所需的连续帧格式：
+
+```powershell
+python data_collect.py
+```
+
+操作流程：
+
+1. 选择要采集的技能（如 `grasp_card`、`grasp_pen` 等，目录名需与 [技能与动作执行](#技能与动作执行) 的模型文件名一致）。
+2. 按提示进入拖动示教模式，**手动拖动机械臂**完整演示一遍动作。
+3. 控制台再按一次 `Enter` 停止录制；可重复采集多条示教（建议每个技能录 5~20 条，覆盖不同物体位置）。
+
+产出的数据目录结构：
+
+```
+data_chunk/<技能>/<示教序号>/000000_j1_j2_j3_j4_j5_j6.jpg
+data_chunk/<技能>/<示教序号>/000001_j1_j2_j3_j4_j5_j6.jpg
+...
+```
+
+- 文件名前缀（`000000`、`000001` ...）用于按时间排序；
+- 后面 6 个数字是该帧机械臂的 6 个关节角（单位：度）；
+- 若某技能目录下直接放图片（不再分示教子目录），整目录视为一条示教。
+
+> 数据采集只依赖机械臂 SDK 与 OpenCV，不需要 GPU/torch。相机索引、采样周期可在 `data_collect.py` 顶部修改。
+
+### 2. 训练（`action_chunk_model.py`）
+
+训练全部技能（遍历 `data_chunk/` 下每个技能子目录）：
+
+```powershell
+python action_chunk_model.py
+```
+
+只训练某个技能：
+
+```powershell
+python action_chunk_model.py grasp_card
+```
+
+训练输出到 `skill/<技能>.pth`，可被主程序 `reception_LLM.py` 直接加载。
+
+> 数据集会自动构造 (当前帧图像 → 未来 K 帧关节角) 样本，末尾不足 K 帧时用最后一帧补齐，使模型学会「保持静止即结束」。仅当最佳 Loss 低于 `SAVE_LOSS_THRESHOLD` 时才会保存模型。训练超参（`NUM_EPOCHS`、`LEARNING_RATE`、`BATCH_SIZE`、`CHUNK_SIZE` 等）在 `action_chunk_model.py` 顶部调整。
 
 ---

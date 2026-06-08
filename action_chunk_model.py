@@ -222,5 +222,35 @@ def train_all():
         train_skill(skill_dir, output_path)
 
 
+def train_one(skill_name):
+    skill_dir = DATA_DIR / skill_name
+    if not skill_dir.is_dir():
+        raise FileNotFoundError(
+            f"技能数据目录不存在: {skill_dir}\n"
+            "请先用 data_collect.py 采集该技能的连续帧示教数据。"
+        )
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = MODEL_DIR / f"{skill_name}.pth"
+    print(f"===== 训练技能: {skill_name} -> {output_path} =====")
+    train_skill(skill_dir, output_path)
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="训练 action chunk 模型")
+    parser.add_argument(
+        "skill",
+        nargs="?",
+        help="只训练指定技能（data_chunk 下的子目录名）；省略则训练全部技能。",
+    )
+    args = parser.parse_args()
+
+    if args.skill:
+        train_one(args.skill)
+    else:
+        train_all()
+
+
 if __name__ == "__main__":
-    train_all()
+    main()
